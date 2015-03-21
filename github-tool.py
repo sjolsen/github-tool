@@ -6,9 +6,8 @@ import urllib.request
 import json
 import os.path
 
-conf_files = ['/etc/github-tool.json',
-              os.path.expanduser ('~/.config/github-tool/config.json')]
-configuration = {
+conf_files = [os.path.relpath ('config.json')]
+default_configuration = {
     'connection_method' : 'https',
     'api_host'          : 'api.github.com',
     'api_root'          : '/',
@@ -16,6 +15,7 @@ configuration = {
 }
 
 def load_configuration ():
+    configuration = default_configuration.copy ()
     for filename in conf_files:
         try:
             with open (filename, 'r') as file:
@@ -23,32 +23,33 @@ def load_configuration ():
         except FileNotFoundError:
             pass
     return configuration
-load_configuration ()
 
 
-def api_get (url):
+def api_url (config, *path):
+    method  = config ['connection_method']
+    host    = config ['api_host']
+    root    = config ['api_root']
+    base    = urllib.parse.urlunsplit ((method, host, root, '', ''))
+    relpath = '/'.join (map (lambda s: urllib.parse.quote (s, safe=''), path))
+    url     = urllib.parse.urljoin (base, relpath)
+    return url
+
+def api_get (config, url):
     # TODO: Error checking
     response = urllib.request.urlopen (url)
     raw_data = response.read ()
     return json.loads (raw_data.decode ('utf-8'))
 
-def api_root ():
-    method = configuration ['connection_method']
-    host   = configuration ['api_host']
-    root   = configuration ['api_root']
-    url    = urllib.parse.urlunsplit ((method, host, root, '', ''))
-    return api_get (url)
-
-def get_repo (api, owner, repo_name):
+def get_repo (config, api, owner, repo_name):
     url = uritemplate.expand (api ['repository_url'], {
         'owner' : owner,
         'repo'  : repo_name
     })
-    return api_get (url)
+    return api_get (config, url)
 
-def save_archive (repo, directory=None, filename=None, archive_format=None, ref=None):
+def save_archive (config, repo, directory=None, filename=None, archive_format=None, ref=None):
     if (archive_format == None):
-        archive_format = configuration ['archive_format']
+        archive_format = config ['archive_format']
     if (directory == None):
         directory = os.curdir
     if (filename == None):
