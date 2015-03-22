@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+import base64
+import copy
 import uritemplate
 import urllib.parse
 import urllib.request
@@ -7,25 +9,59 @@ import json
 import os.path
 
 conf_files = [os.path.relpath ('config.json')]
-default_configuration = {
+default_config = {
     'connection_method' : 'https',
     'api_host'          : 'api.github.com',
     'api_root'          : '/',
-    'archive_format'    : 'tarball'
+    'archive_format'    : 'tarball',
+    'authentication'    : None
 }
+config = None
+
+default_cache = {
+    'api_root'     : None,
+    'auth_headers' : {
+        id(None) : {}
+    }
+}
+cache = None
 
 def load_configuration ():
-    configuration = default_configuration.copy ()
+    global config
+    config = copy.deepcopy (default_config)
+    global cache
+    cache = copy.deepcopy (default_cache)
     for filename in conf_files:
         try:
             with open (filename, 'r') as file:
-                configuration.update (json.load (file))
+                config.update (json.load (file))
         except FileNotFoundError:
             pass
-    return configuration
+load_configuration ()
 
 
-def api_url (config, *path):
+def api_root ():
+    if (cache ['api_root'] == None):
+        cache ['api_root'] = api_get (api_url ())
+    return cache ['api_root']
+
+def auth_headers (auth):
+    if (id(auth) not in cache ['auth_headers']):
+        if (auth ['type'] == 'basic'):
+            username = auth ['username']
+            password = auth ['password']
+            raw      = '{}:{}'.format (username, password)
+            # TODO: Is UTF-8 right?
+            raw64    = base64.standard_b64encode (bytes (raw, 'utf-8'))
+            ascii64  = str (raw64, 'ascii')
+            headers  = {'Authorization' : 'Basic {}'.format (ascii64)}
+            cache ['auth_headers'][id(auth)] = headers
+        else:
+            raise
+    return cache ['auth_headers'][id(auth)]
+
+
+def api_url (*path):
     method  = config ['connection_method']
     host    = config ['api_host']
     root    = config ['api_root']
@@ -34,20 +70,22 @@ def api_url (config, *path):
     url     = urllib.parse.urljoin (base, relpath)
     return url
 
-def api_get (config, url):
+def api_get (url):
     # TODO: Error checking
-    response = urllib.request.urlopen (url)
+    headers  = auth_headers (config ['authentication'])
+    request  = urllib.request.Request (url, headers=headers)
+    response = urllib.request.urlopen (request)
     raw_data = response.read ()
     return json.loads (raw_data.decode ('utf-8'))
 
-def get_repo (config, api, owner, repo_name):
-    url = uritemplate.expand (api ['repository_url'], {
+def get_repo (owner, repo_name):
+    url = uritemplate.expand (api_root () ['repository_url'], {
         'owner' : owner,
         'repo'  : repo_name
     })
-    return api_get (config, url)
+    return api_get (url)
 
-def save_archive (config, repo, directory=None, filename=None, archive_format=None, ref=None):
+def save_archive (repo, directory=None, filename=None, archive_format=None, ref=None):
     if (archive_format == None):
         archive_format = config ['archive_format']
     if (directory == None):
