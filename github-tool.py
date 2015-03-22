@@ -37,7 +37,6 @@ def load_configuration ():
                 config.update (json.load (file))
         except FileNotFoundError:
             pass
-load_configuration ()
 
 
 def api_root ():
@@ -106,3 +105,27 @@ def save_archive (repo, directory=None, filename=None, archive_format=None, ref=
         response = urllib.request.urlopen (url)
         # TODO: May fail for large files?
         file.write (response.read ())
+
+
+import argparse
+
+def main ():
+    arg_parser = argparse.ArgumentParser ()
+    arg_parser.add_argument ('command', help='one of "get"')
+    arg_parser.add_argument ('owner', help='owner of "repo"')
+    arg_parser.add_argument ('repo', help='repo owned by "owner"')
+    arg_parser.add_argument ('--archive-type', help='one of "tarball", "zipball"')
+    arg_parser.add_argument ('--save-dir', help='directory in which to save repos')
+    args = arg_parser.parse_args ()
+
+    if (args.command == 'get'):
+        load_configuration ()
+        repo = get_repo (args.owner, args.repo)
+        save_archive (repo, directory=args.save_dir, archive_format=args.archive_type)
+    else:
+        raise
+
+if __name__ == '__main__':
+    main ()
+else:
+    load_configuration ()
