@@ -142,7 +142,7 @@ def get_repo (owner, repo_name):
 #   current working directory.
 #
 # - filename: The filename to give the saved archive. Defaults to the name of
-#   the repository, plus an appropriate extension.
+#   the repository plus the ref (if suppiled), and an appropriate extension.
 #
 # - archive_format: The format in which to save the archive. Possible values are
 #   'tarball' and 'zipball'. Default is determined by the configuration.
@@ -159,7 +159,8 @@ def save_archive (repo, directory=None, filename=None, archive_format=None, ref=
             'tarball' : 'tar.gz',
             'zipball' : 'zip'
         }
-        filename = '{}.{}'.format (repo ['name'], extensions [archive_format])
+        suffix = '-{}'.format (ref) if ref else ''
+        filename = '{}{}.{}'.format (repo ['name'], suffix, extensions [archive_format])
 
     path = os.path.join (directory, filename)
     with open (path, 'wb') as file:
