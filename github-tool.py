@@ -183,13 +183,21 @@ def main ():
     arg_parser.add_argument ('owner', help='owner of "repo"')
     arg_parser.add_argument ('repo', help='repo owned by "owner"')
     arg_parser.add_argument ('--archive-type', help='one of "tarball", "zipball"')
-    arg_parser.add_argument ('--save-dir', help='directory in which to save repos')
+    arg_parser.add_argument ('--save-dir', help='directory in which to save archive')
+    arg_parser.add_argument ('--filename', help='filename to give saved archive')
+    arg_parser.add_argument ('--ref', help='git ref to save')
     args = arg_parser.parse_args ()
 
     if (args.command == 'get'):
         load_configuration ()
         repo = get_repo (args.owner, args.repo)
-        save_archive (repo, directory=args.save_dir, archive_format=args.archive_type)
+        save_archive (
+            repo,
+            directory      = args.save_dir,
+            filename       = args.filename,
+            archive_format = args.archive_type,
+            ref            = args.ref
+        )
     else:
         raise
 
