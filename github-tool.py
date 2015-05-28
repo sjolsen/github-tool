@@ -8,7 +8,33 @@ import urllib.request
 import json
 import os.path
 
+# A list of configuration files to use, by pathname. Currently, the only
+# configuration file looked for is one named 'config.json' in the current
+# working directory. Each file should contain a json object which, when
+# converted to a Python dictionary, is suitable as an argument to config.update.
 conf_files = [os.path.relpath ('config.json')]
+
+# The default configuration. These settings may be overridden using a
+# configuration file. The possible options are:
+#
+# - connection_method: One of 'http' or 'https', the method used to make API
+#   requests.
+#
+# - api_host: The FQDN of the server hosting the API. By default, GitHub's own
+#   server is used.
+#
+# - api_root: The path on the API server that serves the API root.
+#
+# - archive_format: The default format to use when downloading
+#   archives. Possible values are 'tarball' for a GZip'd tar archive and
+#   'zipball' for a ZIP archive.
+#
+# - authentication: The authentication method to use. A value of None indicates
+#   no authentication. Otherwise, this should be a dictionary with an entry with
+#   key 'type'. The only currently valid value for this key is 'basic', and the
+#   dictionary must contain 'username' and 'password' fields, with the obvious
+#   semantics.
+#
 default_config = {
     'connection_method' : 'https',
     'api_host'          : 'api.github.com',
@@ -18,6 +44,7 @@ default_config = {
 }
 config = None
 
+# The default API cache. Fields are described at their point of use.
 default_cache = {
     'api_root'     : None,
     'auth_headers' : {
@@ -26,6 +53,8 @@ default_cache = {
 }
 cache = None
 
+# Loads all settings and clears the cache. This must be called at least once
+# before using the rest of the code here.
 def load_configuration ():
     global config
     config = copy.deepcopy (default_config)
@@ -38,13 +67,21 @@ def load_configuration ():
         except FileNotFoundError:
             pass
 
-
+# Caching function for retreiving the root API object. This object allows access
+# to the entire GitHub API on the configured server by means of URI templates.
 def api_root ():
+    # cache ['api_root']: The root API object.
     if (cache ['api_root'] == None):
         cache ['api_root'] = api_get (api_url ())
     return cache ['api_root']
 
+# Caching function for authorization headers. These headers are necessary to
+# provide the server with authentication parameters, if using basic
+# authentication.
 def auth_headers (auth):
+    # cache ['auth_headers']: A dictionary mapping authorization information
+    # objects to their respective headers. These headers are suitable for the
+    # headers argument to urllib.request.Request.
     if (id(auth) not in cache ['auth_headers']):
         if (auth ['type'] == 'basic'):
             username = auth ['username']
@@ -59,7 +96,16 @@ def auth_headers (auth):
             raise
     return cache ['auth_headers'][id(auth)]
 
-
+# Variadic function which uses its arguments to construct a URL according to the
+# current configuration. For example, under the default configuration, the call
+#
+#   api_url ('asdf', 'foo', 'bar')
+#
+# would yield
+#
+#   'https://api.github.com/asdf/foo/bar'.
+#
+# Path components are quoted where necessary.
 def api_url (*path):
     method  = config ['connection_method']
     host    = config ['api_host']
@@ -69,6 +115,7 @@ def api_url (*path):
     url     = urllib.parse.urljoin (base, relpath)
     return url
 
+# Retrieves the JSON object served at the given URL.
 def api_get (url):
     # TODO: Error checking
     headers  = auth_headers (config ['authentication'])
@@ -77,6 +124,8 @@ def api_get (url):
     raw_data = response.read ()
     return json.loads (raw_data.decode ('utf-8'))
 
+# Retrieves the object describing the repository owned by the given owner under
+# the given name.
 def get_repo (owner, repo_name):
     url = uritemplate.expand (api_root () ['repository_url'], {
         'owner' : owner,
@@ -84,6 +133,22 @@ def get_repo (owner, repo_name):
     })
     return api_get (url)
 
+# Saves a repository to disk in archive format. The arguments are as follows:
+#
+# - repo: The object describing the repository to save (e.g., the return value
+#   of get_repo).
+#
+# - directory: The directory in which to save the archive. Defaults to the
+#   current working directory.
+#
+# - filename: The filename to give the saved archive. Defaults to the name of
+#   the repository, plus an appropriate extension.
+#
+# - archive_format: The format in which to save the archive. Possible values are
+#   'tarball' and 'zipball'. Default is determined by the configuration.
+#
+# - ref: The git ref to fetch. By default, HEAD on branch master is downloaded.
+#
 def save_archive (repo, directory=None, filename=None, archive_format=None, ref=None):
     if (archive_format == None):
         archive_format = config ['archive_format']
@@ -109,6 +174,9 @@ def save_archive (repo, directory=None, filename=None, archive_format=None, ref=
 
 import argparse
 
+# Program driver with simple options and minimal error handling. This is what
+# should be replaced for scripting purposes (alternatively, the above code could
+# be put into a module).
 def main ():
     arg_parser = argparse.ArgumentParser ()
     arg_parser.add_argument ('command', help='one of "get"')
